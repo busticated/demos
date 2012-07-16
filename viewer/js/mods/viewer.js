@@ -21,7 +21,8 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'l
     };
 
     v.scrollState = {
-        page: 1
+        page: 1,
+        postsViewed: 0
     };
 
     v.setup = function( cfg ){
@@ -246,8 +247,12 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'l
         return v.scrollState.page;
     };
 
+    // todo:
+    // + way points fire twice when scrolling up(?) causing
+    //   the index to increment inaccurately
     v.rotateAds = function(){
-        if ( v.index && v.index % v.options.postsPerAdRotation === 0 ){
+        var adIndex = v.scrollState.postsViewed += 1;
+        if ( adIndex % v.options.postsPerAdRotation === 0 ){
             mc.emit( 'rotateAds' );
         }
         return this;
