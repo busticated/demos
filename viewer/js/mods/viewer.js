@@ -40,11 +40,13 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'l
 
         v.getPosts( v.options.postsToRetrieve ).then( v.addPosts );
 
-        window.posts = v;
+        window.viewer = v;
         return this;
     };
 
     v.listen = function(){
+        var debounceTimer = null;
+
         $( document )
             .on( 'keydown', function( e ){
                 switch ( e.keyCode ){
@@ -66,11 +68,14 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'l
             .on( 'waypoint.reached', function( e, direction ){
                 v.setIndex( $( e.target ).data( 'postIndex' ) );
 
-                if ( direction === 'up' ){
-                    v.showPreviousPost();
-                } else {
-                    v.showNextPost();
-                }
+                debounceTimer && clearTimeout( debounceTimer );
+                debounceTimer = setTimeout(function(){
+                    if ( direction === 'up' ){
+                        v.showPreviousPost();
+                    } else {
+                        v.showNextPost();
+                    }
+                }, 0 );
 
                 v.setCurrentPage( direction ).rotateAds();
 
@@ -84,12 +89,15 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'l
         return this;
     };
 
+    // todo:
+    // + need a more reliable way to track & handle failed page loads
     v.currentPage = 1;
-
     v.getPosts = function( count ){
         var xhr = $.ajax({
             url: v.options.endpoint.replace( '{{page}}', v.currentPage )
         });
+
+        v.currentPage += 1;
 
         return {
             then: function( callback ){
@@ -116,35 +124,34 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'l
     };
 
     // todo:
-    // + break this into "addOldPosts" & "addNewPosts" methods (or some such)
-    // + figure out how to detect whether posts get added to the start (old posts) or end (new posts)
-    // + there's probably a nicer way of iterating over only the newly added posts
+    // + break into addPosts & displayPosts methods so that we can grab lots of posts
+    //   at once but only display some subset of the collection we retreive
+    // + if we don't know asset dimensions and set waypoint before asset loads,
+    //   the waypoint's offset will be inaccurate - perhaps use
+    //   post.$el.one( 'load', function(){ post.$el.waypoint() );
+    //   but need to set in a closure.. or maybe just call $.waypoints( 'refresh' )
+    //   at some appropriate time in the future?
     v.addPosts = function( postData ){
-        var insertFrom = v.length,
-            posts = [];
+        var insertFrom = v.length;
 
-        $.each( postData, function( idx, post ){
-            var postHtml = tmpl( post ),
-                $el = $( postHtml );
-
-            posts.push({
-                $el: $el,
-                html: postHtml,
-                innerHtml: $el[ 0 ].innerHTML,
-                id: $el.data( 'aid' ),
-                render: function(){}
-            });
-        });
-
-        v.add( posts, insertFrom );
+        v.add( postData, insertFrom );
 
         v.each( function( post, idx ){
             if ( idx >= insertFrom ){
-                post.$el.data( 'postIndex', idx ).appendTo( '#js-poststream' ).waypoint();
+                var postHtml = tmpl( post ),
+                    $el = $( postHtml ).data( 'postIndex', idx );
+
+                v.update( idx, {
+                    $el: $el,
+                    html: postHtml,
+                    innerHtml: $el[ 0 ].innerHTML,
+                    id: $el.data( 'aid' ),
+                    render: function(){}
+                });
+
+                v.get( idx ).$el.appendTo( '#js-poststream' ).waypoint();
             }
         });
-
-        v.currentPage += 1;
 
         return this;
     };
@@ -200,7 +207,7 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'l
     };
 
     v.showNextPost = function(){
-        if ( v.isLast( v.index + 3 ) ){
+        if ( ! v.has( v.index + 3 ) ){
             v.getPosts( v.options.postsToRetrieve ).then( v.addPosts );
         }
 
@@ -211,10 +218,6 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'l
     };
 
     v.showPreviousPost = function(){
-        if ( v.isFirst() ){
-            return;
-        }
-
         v.resurrectPosts();
         v.trimPostsBelow();
 
@@ -248,7 +251,7 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'l
     };
 
     // todo:
-    // + way points fire twice when scrolling up(?) causing
+    // + waypoints fire twice when scrolling up(?) causing
     //   the index to increment inaccurately
     v.rotateAds = function(){
         var adIndex = v.scrollState.postsViewed += 1;
