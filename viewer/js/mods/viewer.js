@@ -1,6 +1,6 @@
 /* global define: false, require: false */
 
-define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'libs/polyfills', 'libs/waypoints' ], function( $, Handlebars, Iterator, mc ){
+define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'mods/postModel', 'mods/postView', 'libs/polyfills', 'libs/waypoints' ], function( $, Handlebars, Iterator, mc, PostModel, PostView ){
     'use strict';
 
     var wasSetup = false,
@@ -11,8 +11,6 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'l
     v.options = {
         container: '#js-poststream',
         isLoadingClass: '.is-loading',
-        isClearedClass: '.is-cleared',
-        postTemplate: null,
         postsToRetrieve: 10,
         postsPerPage: 7,
         postsPerAdRotation: 3,
@@ -33,12 +31,6 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'l
 
         $.extend( v.options, cfg );
 
-        if ( ! v.options.postTemplate ){
-            v.options.postTemplate = $( '#tmpl-post' ).html();
-        }
-
-        v.setTemplate( v.options.postTemplate );
-
         v.getPosts( v.options.postsToRetrieve ).then( v.addPosts );
 
         window.viewer = v;
@@ -48,7 +40,17 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'l
     v.listen = function(){
         var timerId = null;
 
+        mc.on( 'fb-sharecounts-available', function( shares ){
+            for ( var i = 0, l = shares.length; i < l; i += 1 ){
+                if ( typeof v.collection[ 'aid-' + shares[ i ].id ] === 'object' ){
+                    v.collection[ 'aid-' + shares[ i ].id ].set( 'fbshares', shares[ i ].count );
+                }
+            }
+        });
+
         $( document )
+            // todo:
+            // + fix these now that $el is on the view
             .on( 'keydown', function( e ){
                 switch ( e.keyCode ){
                     // Next: 74 = j, 40 = down arrow
@@ -94,18 +96,15 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'l
     // + need a more reliable way to track & handle failed page loads
     v.currentPage = 1;
     v.getPosts = function( count ){
-        var xhr = $.ajax({
-            url: v.options.endpoint.replace( '{{page}}', v.currentPage )
-        });
+        var deferred = $.Deferred(),
+            xhr = $.ajax({
+                url: v.options.endpoint.replace( '{{page}}', v.currentPage ),
+                success: deferred.resolve
+            });
 
         v.currentPage += 1;
 
-        return {
-            then: function( callback ){
-                xhr.success( callback );
-                return this;
-            }
-        };
+        return deferred.promise();
     };
 
     v.getActivePostsRange = function(){
@@ -132,27 +131,26 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'l
     //   post.$el.one( 'load', function(){ post.$el.waypoint() );
     //   but need to set in a closure.. or maybe just call $.waypoints( 'refresh' )
     //   at some appropriate time in the future?
-    v.addPosts = function( postData ){
-        var insertFrom = v.length;
+    // + extract the .each() callback into a stand-alone method
+    v.addPosts = function( rawPosts ){
+        var insertFrom = v.length,
+            newlyAddedPosts = [],
+            post,
+            postView;
 
-        v.add( postData, insertFrom );
-
-        v.each( function( post, idx ){
+        v.add( rawPosts, insertFrom );
+        v.each( function( rawPost, idx ){
             if ( idx >= insertFrom ){
-                var postHtml = tmpl( post ),
-                    $el = $( postHtml ).data( 'postIndex', idx );
+                post = new PostModel( rawPost );
+                postView = new PostView( post, idx );
 
-                v.update( idx, {
-                    $el: $el,
-                    html: postHtml,
-                    innerHtml: $el[ 0 ].innerHTML,
-                    id: $el.data( 'aid' ),
-                    render: function(){}
-                });
-
-                v.get( idx ).$el.appendTo( '#js-poststream' ).waypoint();
+                v.collection[ 'aid-' + post.id ] = post;
+                v.update( idx, post );
+                newlyAddedPosts.push( post );
             }
         });
+
+        mc.emit( 'iscroll-newcontentadded', newlyAddedPosts );
 
         return this;
     };
@@ -179,15 +177,8 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'l
 
     v.trimPosts = function( from, to ){
         v.each(function( post, idx ){
-            // looks like the act of checking a class causes a reflow...
-            // use post.$el.data( 'isCleared' ) instead?
-            // or store on the post object itself - e.g. post.isCleared = true;
-            // - or - 
-            // need to reduce the iterations somehow?
-            if ( idx >= from && idx <= to && ! post.$el.hasClass( v.options.isClearedClass ) ){
-                post.$el.height( post.$el.outerHeight() );
-                post.$el.addClass( v.options.isClearedClass.replace( '.', '' ) );
-                post.$el.empty();
+            if ( idx >= from && idx <= to && post.isActive ){
+                post.set( 'isActive', false );
             }
         });
 
@@ -198,9 +189,8 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'l
         var activePosts = v.getActivePostsRange();
 
         v.each(function( post, idx ){
-            if ( idx >= activePosts.start && idx < activePosts.end && post.$el.hasClass( v.options.isClearedClass.replace( '.', '' ) ) ){
-                post.$el.html( post.innerHtml );
-                post.$el.removeClass( v.options.isClearedClass.replace( '.', '' ) );
+            if ( idx >= activePosts.start && idx < activePosts.end && ! post.isActive ){
+                post.set( 'isActive', true );
             }
         });
 
@@ -228,15 +218,6 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'l
     v.setScrollPosition = function( offset ){
         $( document ).scrollTop( offset );
         return this;
-    };
-
-    v.setTemplate = function( template ){
-        tmpl = Handlebars.compile( template );
-        return this;
-    };
-
-    v.getTemplate = function(){
-        return tmpl;
     };
 
     v.setCurrentPage = function( direction ){
