@@ -1,17 +1,18 @@
 /* jshint */
 /*global define: false, require: false */
-define( [ 'libs/eventer' ], function ( Eventer ) {
-    var PostModel = function( postData ){
+define( [ 'mods/model', 'libs/polyfills' ], function ( Model ) {
+    var PostModel = function PostModel( postData ){
         if ( ! ( this instanceof PostModel ) ){
             return new PostModel( postData );
         }
 
-        Eventer.call( this );
+        Model.call( this );
         this.id = postData.id;
         this.title = postData.title;
         this.body = postData.body;
         this.url = postData.url;
         this.fbshares = '';
+        this.assetType = postData.AssetType;
         this.asset = {
             height: postData.asset.height,
             width: postData.asset.width,
@@ -21,21 +22,8 @@ define( [ 'libs/eventer' ], function ( Eventer ) {
         this.isActive = true;
     };
 
-    PostModel.prototype = new Eventer();
-
+    PostModel.prototype = Object.create( Model.prototype );
     PostModel.prototype.constructor = PostModel;
-
-    PostModel.prototype.set = function( prop, val ){
-        if ( ! this.hasOwnProperty( prop ) ){
-            return this;
-        }
-
-        this[ prop ] = val;
-        this.emit( 'update', { property: prop, value: val } );
-        this.emit( 'update:' + prop, val );
-
-        return this;
-    };
 
     return PostModel;
 });

@@ -5,6 +5,7 @@
 
 define(['jquery', 'mods/utils', 'libs/handlebars', 'mods/mastercontrol', 'libs/polyfills' ], function ( $, utils, Handlebars, mc ) {
     var slotTemplate = '<div id="{{id}}" class="{{cssClasses}}" data-adtype="{{type}}" data-adsize="{{size}}"></div>',
+        tmpl = Handlebars.compile( slotTemplate ),
         activeSlots = {},
         _configs = {
             HasAsyncAds: true,
@@ -50,8 +51,17 @@ define(['jquery', 'mods/utils', 'libs/handlebars', 'mods/mastercontrol', 'libs/p
         return this;
     };
 
-    var render = function ( scope ) {
-        var $ads = $( 'div.js-ad', $( scope || document ) ),
+    var listen = function(){
+        mc.on( 'iscroll-addsponsoredpost', function( target ){
+            var $spost = $( buildSponsoredPostForStream() ).appendTo( target );
+            render( $spost );
+        });
+
+        return this;
+    };
+
+    var render = function ( $scope ) {
+        var $ads = $( 'div.js-ad', $scope || document ),
             type, size, id;
 
         $ads.each(function () {
@@ -124,7 +134,7 @@ define(['jquery', 'mods/utils', 'libs/handlebars', 'mods/mastercontrol', 'libs/p
             size: size
         };
 
-        return Mustache.render( slotTemplate, model );
+        return tmpl( model );
     };
 
     var buildAdContainer = function () {
@@ -175,6 +185,7 @@ define(['jquery', 'mods/utils', 'libs/handlebars', 'mods/mastercontrol', 'libs/p
     // public api /////////////////////////////////////////////////////////////
     return {
         setup: setup,
+        listen: listen,
         hasService: hasService,
         render: render,
         getSiteForTargeting: getSiteForTargeting,

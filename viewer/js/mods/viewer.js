@@ -1,6 +1,16 @@
 /* global define: false, require: false */
 
-define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'mods/postModel', 'mods/postView', 'libs/polyfills', 'libs/waypoints' ], function( $, Handlebars, Iterator, mc, PostModel, PostView ){
+define([
+        'jquery',
+        'libs/handlebars',
+        'libs/iterator',
+        'mods/mastercontrol',
+        'mods/postModel',
+        'mods/postView',
+        'libs/polyfills',
+        'libs/waypoints'
+    ],
+    function( $, Handlebars, Iterator, mc, PostModel, PostView ){
     'use strict';
 
     var wasSetup = false,
@@ -10,10 +20,10 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'm
 
     v.options = {
         container: '#js-poststream',
-        isLoadingClass: '.is-loading',
         postsToRetrieve: 10,
         postsPerPage: 7,
         postsPerAdRotation: 3,
+        postsBeforeSponsoredPost: 3,
         activePostCount: 7,
         lookAhead: 5,
         endpoint: '/posts/page/{{page}}/' // should be '/posts/{{count}}'
@@ -40,6 +50,8 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'm
     v.listen = function(){
         var timerId = null;
 
+        // this should eventually catch a generic "counts-available" event
+        // via mc.on( 'counts-available', { type: 'fbshare', counts: [ { id: <asset id>, count: <share count> } ] } );
         mc.on( 'fb-sharecounts-available', function( shares ){
             for ( var i = 0, l = shares.length; i < l; i += 1 ){
                 if ( typeof v.collection[ 'aid-' + shares[ i ].id ] === 'object' ){
@@ -49,8 +61,6 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'm
         });
 
         $( document )
-            // todo:
-            // + fix these now that $el is on the view
             .on( 'keydown', function( e ){
                 switch ( e.keyCode ){
                     // Next: 74 = j, 40 = down arrow
@@ -81,12 +91,6 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'm
                 });
 
                 v.setCurrentPage( direction ).rotateAds();
-
-                // mc.emit( 'status', {
-                //     type: 'ok',
-                //     msg: 'viewing post ',
-                //     data: v.index + 1
-                // });
             });
 
         return this;
@@ -143,6 +147,10 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'm
             if ( idx >= insertFrom ){
                 post = new PostModel( rawPost );
                 postView = new PostView( post, idx );
+
+                if ( v.shouldAddSponsoredPost( idx ) ){
+                    mc.emit( 'iscroll-addsponsoredpost', v.options.container );
+                }
 
                 v.collection[ 'aid-' + post.id ] = post;
                 v.update( idx, post );
@@ -236,6 +244,14 @@ define( [ 'jquery', 'libs/handlebars', 'libs/iterator', 'mods/mastercontrol', 'm
             mc.emit( 'rotateAds' );
         }
         return this;
+    };
+
+    v.shouldAddSponsoredPost = function( index ){
+        if ( v.scrollState.postsViewed === 0 ){
+            return index === v.options.postsBeforeSponsoredPost - 1;
+        }
+
+        return ( index - v.options.postsBeforeSponsoredPost + 1 ) % v.options.postsPerPage === 0;
     };
 
     return v;
