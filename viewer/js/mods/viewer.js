@@ -7,16 +7,14 @@ define([
         'mods/mastercontrol',
         'mods/postModel',
         'mods/postView',
-        'libs/polyfills',
         'libs/waypoints'
     ],
     function( $, Handlebars, Iterator, mc, PostModel, PostView ){
     'use strict';
 
-    var wasSetup = false,
-        tmpl;
+    var tmpl;
 
-    var v = Object.create( new Iterator() );
+    var v = new Iterator();
 
     v.options = {
         container: '#js-poststream',
@@ -35,13 +33,9 @@ define([
     };
 
     v.setup = function( cfg ){
-        if ( wasSetup ){
-            return this;
-        }
-
         $.extend( v.options, cfg );
 
-        v.getPosts( v.options.postsToRetrieve ).then( v.addPosts );
+        v.bootstrapPosts().then( v.addPosts );
 
         window.viewer = v;
         return this;
@@ -96,6 +90,17 @@ define([
         return this;
     };
 
+    v.bootstrapPosts = function(){
+        var postData = $.parseJSON( $( '#js-postdata' ).html() );
+
+        return {
+            then: function( callback ){
+                callback( postData );
+                return this;
+            }
+        };
+    };
+
     // todo:
     // + need a more reliable way to track & handle failed page loads
     v.currentPage = 1;
@@ -109,22 +114,6 @@ define([
         v.currentPage += 1;
 
         return deferred.promise();
-    };
-
-    v.getActivePostsRange = function(){
-        var count = Math.round( v.options.activePostCount / 2 );
-
-        if ( v.index - count <= 0 ){
-            return {
-                start: 0,
-                end: v.options.activePostCount
-            };
-        }
-
-        return {
-            start: v.index - count,
-            end: v.index + count
-        };
     };
 
     // todo:
@@ -161,6 +150,22 @@ define([
         mc.emit( 'iscroll-newcontentadded', newlyAddedPosts );
 
         return this;
+    };
+
+    v.getActivePostsRange = function(){
+        var count = Math.round( v.options.activePostCount / 2 );
+
+        if ( v.index - count <= 0 ){
+            return {
+                start: 0,
+                end: v.options.activePostCount
+            };
+        }
+
+        return {
+            start: v.index - count,
+            end: v.index + count
+        };
     };
 
     v.trimPostsAbove = function(){
