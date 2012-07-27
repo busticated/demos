@@ -65,18 +65,11 @@ define(['jquery', 'mods/utils', 'libs/handlebars', 'mods/mastercontrol', 'libs/p
     };
 
     var render = function ( $scope ) {
-        var $ads = $( 'div.js-ad', $scope || document ),
-            type, size, id;
+        var slots = getSlots( $scope );
 
-        $ads.each(function () {
-            var $this = $( this );
-
-            type = $this.data( 'adtype' );
-            size = $this.data( 'adsize' );
-            id = $this.attr( 'id' );
-
-            getAd( type, size, id );
-        });
+        for ( var i = 0, l = slots.length; i < l; i += 1 ){
+            fetch( slots[ i ].type, slots[ i ].size, slots[ i ].id );
+        }
 
         return this;
     };
@@ -102,22 +95,34 @@ define(['jquery', 'mods/utils', 'libs/handlebars', 'mods/mastercontrol', 'libs/p
         return ( _configs.IsLoggedIn ? '1' : '0' );
     };
 
-    var getAd = function ( type, size, id ) {
-        var initSlot = (function( type, size, id ){
-            return function(){
-                type = setUniqueSlotType( type );
-                activeSlots[ type ] = googletag.defineSlot( SLUG + type, size, id ).addService( _service );
-                requestAnimationFrame(
-                    (function( id ){
-                        return function(){
-                            googletag.display( id );
-                        };
-                    }( id ))
-                );
-            };
-        }( type, size, id ));
+    var getSlots = function( $scope ){
+        var $ads = $( 'div.js-ad', $scope || document ),
+            adSlots = [],
+            $ad;
 
-        googletag.cmd.push( initSlot );
+        $ads.each(function ( idx, item ) {
+            $ad = $( item );
+
+            adSlots.push({
+                id: $ad.attr( 'id' ),
+                type: $ad.data( 'adtype' ),
+                size: $ad.data( 'adsize' )
+            });
+        });
+
+        return adSlots;
+    };
+
+    var fetch = function ( type, size, id ) {
+        var init = function(){
+            type = setUniqueSlotType( type );
+            activeSlots[ type ] = googletag.defineSlot( SLUG + type, size, id ).addService( _service );
+            requestAnimationFrame(function(){
+                googletag.display( id );
+            });
+        };
+
+        googletag.cmd.push( init );
 
         return this;
     };
@@ -139,10 +144,16 @@ define(['jquery', 'mods/utils', 'libs/handlebars', 'mods/mastercontrol', 'libs/p
         return setUniqueSlotType( name + count );
     };
 
-    var refresh = function ( slot ) {
-        googletag.cmd.push(function() {
-            _service.refresh( slot ); //if slot is undefined, all ads on page are refreshed
-        });
+    var refresh = function ( $scope ) {
+        var slots = getSlots( $scope ),
+            ads = [],
+            doRefresh;
+
+        for ( var i = 0, l = slots.length; i < l; i += 1 ){
+            ads.push( activeSlots[ slots[ i ].type ] );
+        }
+
+        googletag.cmd.push(function(){ _service.refresh( ads ) });
 
         return this;
     };
@@ -218,7 +229,8 @@ define(['jquery', 'mods/utils', 'libs/handlebars', 'mods/mastercontrol', 'libs/p
         render: render,
         getSiteForTargeting: getSiteForTargeting,
         getPageForTargeting: getPageForTargeting,
-        getAd: getAd,
+        getSlots: getSlots,
+        fetch: fetch,
         activeSlots: activeSlots,
         refresh: refresh,
         reload: reload,

@@ -10,12 +10,12 @@ define( [ 'jquery', 'mods/mastercontrol', 'mods/ads', 'mods/utils' ], function( 
         tmpl: [
             '<div class="ad-container ad-rotator">',
                 '<div id="js-adgroup-01" class="ad-group ad-group-a is-visible">',
-                    '<div id="ad-01" class="js-ad ad ad-left ad-skyscraper" data-adtype="ICHCTEST_160_LEFT_BTFISCROLL_ROS" data-adsize="[[160, 600],[300,600]]"></div>',
-                    '<div id="ad-02" class="js-ad ad ad-right ad-skyscraper" data-adtype="ICHCTEST_160_RIGHT_BTFISCROLL_ROS" data-adsize="[[160, 600],[300,600]]"></div>',
+                    '<div id="ad-skyscraper-01" class="js-ad ad ad-left ad-skyscraper" data-adtype="ICHCTEST_160_LEFT_BTFISCROLL_ROS_0" data-adsize="[[160, 600],[300,600]]"></div>',
+                    '<div id="ad-skyscraper-02" class="js-ad ad ad-right ad-skyscraper" data-adtype="ICHCTEST_160_RIGHT_BTFISCROLL_ROS_0" data-adsize="[[160, 600],[300,600]]"></div>',
                 '</div>',
                 '<div id="js-adgroup-02" class="ad-group ad-group-b">',
-                    '<div id="ad-03" class="js-ad ad ad-left ad-skyscraper" data-adtype="ICHCTEST_160_LEFT_BTFISCROLL_ROS_0" data-adsize="[[160, 600],[300,600]]"></div>',
-                    '<div id="ad-04" class="js-ad ad ad-right ad-skyscraper" data-adtype="ICHCTEST_160_RIGHT_BTFISCROLL_ROS_0" data-adsize="[[160, 600],[300,600]]"></div>',
+                    '<div id="ad-skyscraper-03" class="js-ad ad ad-left ad-skyscraper" data-adtype="ICHCTEST_160_LEFT_BTFISCROLL_ROS_1" data-adsize="[[160, 600],[300,600]]"></div>',
+                    '<div id="ad-skyscraper-04" class="js-ad ad ad-right ad-skyscraper" data-adtype="ICHCTEST_160_RIGHT_BTFISCROLL_ROS_1" data-adsize="[[160, 600],[300,600]]"></div>',
                 '</div>',
             '</div>'
         ].join( '' ),
@@ -24,7 +24,7 @@ define( [ 'jquery', 'mods/mastercontrol', 'mods/ads', 'mods/utils' ], function( 
 
     a.setup = function(){
         $( a.options.container ).prepend( a.options.tmpl );
-        ads.render( '#js-adgroup-01, #js-adgroup-02' );
+        ads.render( $( '#js-adgroup-01, #js-adgroup-02' ) );
 
         return this;
     };
@@ -36,24 +36,14 @@ define( [ 'jquery', 'mods/mastercontrol', 'mods/ads', 'mods/utils' ], function( 
     };
 
     a.rotateAds = function(){
+        var $scope;
+
         a.rotateAds.__timer && clearTimeout( a.rotateAds.__timer );
 
         a.rotateAds.__timer = setTimeout(function(){
-            $( '#js-adgroup-01, #js-adgroup-02' ).toggleClass( 'is-visible' );
-            a.refreshAds();
+            $scope = $( '#js-adgroup-01, #js-adgroup-02' ).toggleClass( 'is-visible' ).not( '.is-visible' );
+            ads.refresh( $scope );
         }, a.options.debounceBy );
-
-        return this;
-    };
-
-    a.refreshAds = function(){
-        var $scope = $( '#js-adgroup-01:not(.is-visible), #js-adgroup-02:not(.is-visible)' );
-
-        $scope.find( '.js-ad' ).empty().each(function( idx, slot ){
-            $( slot ).attr( 'id', 'ad-' + utils.makeGUID() );
-        });
-
-        ads.render( $scope );
 
         return this;
     };
